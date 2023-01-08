@@ -1,4 +1,4 @@
-# WorIg game
+# Game Wormi
 
 Описание:
 
