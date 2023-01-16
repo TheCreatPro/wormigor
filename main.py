@@ -1,7 +1,8 @@
 import pygame
-import sys
-import os
-from random import randint
+from os import path
+from time import sleep
+from random import randrange
+from sys import exit as close
 
 # hex: #f5f9ea
 
@@ -19,7 +20,7 @@ all_sprites = pygame.sprite.Group()  # группа всех спрайтов
 
 def terminate():
     pygame.quit()
-    sys.exit()
+    close()
 
 
 def start_screen():
@@ -124,17 +125,17 @@ class Snake(pygame.sprite.Sprite):
         self.length = 3  # длина (кол-во блоков)
         self.direction = 'RIGHT'  # направление
         self.block_size = 20  # размер 1 блока (в px)
-        self.score = 0  # очки
-        self.body = [(20, 20), (20, 40), (20, 60)]  # список с координатами
+        self.body = [[x - block_size, 100], [x, 100]]  # координаты тела (начиная с конца, но без головы)
         self.image = load_image('snake_texture.png')
         self.rect = self.image.get_rect()
         self.rect.x = x  # координата 1 кубика по х
         self.rect.y = 100
+        self.prev = 0
 
-    def update(self, direction, x, y):
-        print(self.rect.x, self.rect.y)
-        if self.border == 'limited field' and not 19 < self.rect.x < 761 or not 19 < self.rect.y < 561:
-            return False
+    def update(self, direction, x, y, score):
+        if (self.border == 'limited field' and (not 19 < self.rect.x < 761 or not 19 < self.rect.y < 561)) or (self.body.count([self.rect.x, self.rect.y]) > 1):
+            game_over(score)
+            return
         elif direction == 'LEFT':
             self.rect.x -= 20
         elif direction == 'RIGHT':
@@ -143,13 +144,26 @@ class Snake(pygame.sprite.Sprite):
             self.rect.y += 20
         elif direction == 'UP':
             self.rect.y -= 20
-        return True
+        if self.border == 'unlimited field':
+            if self.rect.x < 0:
+                self.rect.x = W
+            elif self.rect.x > W:
+                self.rect.x = 0
+            elif self.rect.y < 0:
+                self.rect.y = H
+            elif self.rect.y > H:
+                self.rect.y = 0
+        self.body.append([self.rect.x, self.rect.y])
+        # если очки увеличатся, то хвостик удлинится:
+        if self.prev >= score:
+            self.body = self.body[1:]
+        self.prev = score
 
 
-def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)  # путь к файлу
+def load_image(name):
+    fullname = path.join('data', name)  # путь к файлу
     # если файл не существует, то выходим:
-    if not os.path.isfile(fullname):
+    if not path.isfile(fullname):
         terminate()
     image = pygame.image.load(fullname)
     return image
@@ -162,24 +176,29 @@ def game():
     cell_size = w // n
     snake_color = pygame.Color('#a3d247')  # более тёмный цвет
     border_color = pygame.Color('#7193bf')  # граница
-    font = pygame.font.Font(None, 20)
+    image_snake = load_image('snake_texture.png')
+    image_fruit = load_image('fruit.png')
+    font = pygame.font.SysFont("comicsansms", 20)
     direction = 'RIGHT'  # направление
-    all_sprites.add(Snake(20, choice, fps, 100), Snake(20, choice, fps, 80), Snake(20, choice, fps, 60))
+    fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) * cell_size, randrange(1, ((H - cell_size) // cell_size)) * cell_size]  # координата фрукта
+    score = 0
+    snake = Snake(20, choice, fps, 100)
     while True:
         clock.tick(fps)
+        snake_body = snake.body
         screen.fill('#abd850')
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
             elif event.type == pygame.KEYDOWN:
                 # игрок выбирает режим:
-                if event.key == pygame.K_UP:
+                if event.key == pygame.K_UP and direction != 'DOWN':
                     direction = 'UP'
-                elif event.key == pygame.K_DOWN:
+                elif event.key == pygame.K_DOWN and direction != 'UP':
                     direction = 'DOWN'
-                elif event.key == pygame.K_LEFT:
+                elif event.key == pygame.K_LEFT and direction != 'RIGHT':
                     direction = 'LEFT'
-                elif event.key == pygame.K_RIGHT:
+                elif event.key == pygame.K_RIGHT and direction != 'LEFT':
                     direction = 'RIGHT'
         # отрисовка игрового поля:
         for i in range(0, n):
@@ -190,20 +209,33 @@ def game():
         if choice == 'limited field':
             pygame.draw.rect(screen, border_color, (
                 (cell_size // 2, cell_size // 2), (W - cell_size, H - cell_size)), cell_size // 2)
+        # змеиное туловище
+        for pos in snake_body:
+            screen.blit(image_snake, (pos[0], pos[1]))
+            if fruit_pos == pos:
+                # меняем координату и прибавляем очки
+                fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) * cell_size, randrange(1, ((H - cell_size) // cell_size)) * cell_size]
+                score += 1
 
-        if all_sprites.update(direction, 1, 1):
-            string_rendered = pygame.font.Font(None, 50).render(f"You've lost! Press ESC to exit. Your score: 00", True, pygame.Color('red'))
-            screen.blit(string_rendered, [30, 250])
-        else:
-            string_rendered = font.render("score: 00", True,
-                                          pygame.Color('white'))
-            screen.blit(string_rendered, [5, 5])
+        screen.blit(image_fruit, (fruit_pos[0], fruit_pos[1]))
+        all_sprites.update(direction, 1, 1, score)
+        # очки:
+        string_rendered = font.render(f"score: {score}", True, pygame.Color('white'))
+        screen.blit(string_rendered, [710, 570])
+
         all_sprites.draw(screen)
-
-        # отрисовываем очки:
-
-
         pygame.display.flip()
+
+
+def game_over(score):
+    font = pygame.font.SysFont('times new roman', 50)
+    game_over_surface = font.render("You've lost! Your score: " + str(score), True, 'red')
+    rect = game_over_surface.get_rect()
+    rect.midtop = (W // 2, H // 4)
+    screen.blit(game_over_surface, rect)
+    pygame.display.flip()
+    # time.sleep(15)
+    # terminate()
 
 
 print('начало игры')
