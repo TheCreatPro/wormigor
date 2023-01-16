@@ -3,8 +3,7 @@ from os import path
 from time import sleep
 from random import randrange
 from sys import exit as close
-
-# hex: #f5f9ea
+from datetime import datetime
 
 pygame.init()
 
@@ -47,7 +46,7 @@ def start_screen():
                 # выход со стартового окна при нажатии Enter
                 name = name.strip()
                 if event.key == pygame.K_RETURN and name != '':
-                    return choice  # переходим на следующий экран
+                    return choice, name  # переходим на следующий экран
 
         # отрисовка текста:
         string_rendered = font.render(
@@ -85,7 +84,7 @@ def start_screen():
 
 
 # игрок вводит ФПС/скорость
-def choice_of_speed():
+def choice_of_speed(name):
     fps = ''
     font = pygame.font.Font(None, 30)
     while True:
@@ -101,6 +100,11 @@ def choice_of_speed():
                 # выход с окна при нажатии Enter
                 if event.key == pygame.K_RETURN and fps != '' and \
                         0 < int(fps) <= 50:
+                    file = open('Player rating.txt', mode='a', encoding='utf8')
+                    file.write(
+                        f'Player "{name}" started the game. Date: '
+                        f'{datetime.now().strftime("%d %b %Y %H:%M:%S")}\n')
+                    file.close()
                     return fps  # начинаем игру
         # отрисовка текста:
         string_rendered = font.render(
@@ -117,24 +121,24 @@ def choice_of_speed():
 
 
 class Snake(pygame.sprite.Sprite):
-    def __init__(self, block_size, border, speed, x):
+    def __init__(self, block_size, border, x):
         super().__init__(all_sprites)
         self.block_size = block_size
         self.border = border  # есть ли граница
-        self.speed = speed  # скорость (кадр/сек)
-        self.length = 3  # длина (кол-во блоков)
         self.direction = 'RIGHT'  # направление
         self.block_size = 20  # размер 1 блока (в px)
-        self.body = [[x - block_size, 100], [x, 100]]  # координаты тела (начиная с конца, но без головы)
+        # координаты тела (начиная с конца, но без головы):
+        self.body = [[x - block_size, 100], [x, 100]]
         self.image = load_image('snake_texture.png')
         self.rect = self.image.get_rect()
         self.rect.x = x  # координата 1 кубика по х
         self.rect.y = 100
         self.prev = 0
 
-    def update(self, direction, x, y, score):
-        if (self.border == 'limited field' and (not 19 < self.rect.x < 761 or not 19 < self.rect.y < 561)) or (self.body.count([self.rect.x, self.rect.y]) > 1):
-            game_over(score)
+    def update(self, direction, x, y, score, name):
+        if self.border == 'limited field' and (not 19 < self.rect.x < 761 or
+                                               not 19 < self.rect.y < 561):
+            game_over(score, name, self.border)
             return
         elif direction == 'LEFT':
             self.rect.x -= 20
@@ -149,7 +153,7 @@ class Snake(pygame.sprite.Sprite):
                 self.rect.x = W
             elif self.rect.x > W:
                 self.rect.x = 0
-            elif self.rect.y < 0:
+            if self.rect.y < 0:
                 self.rect.y = H
             elif self.rect.y > H:
                 self.rect.y = 0
@@ -157,6 +161,10 @@ class Snake(pygame.sprite.Sprite):
         # если очки увеличатся, то хвостик удлинится:
         if self.prev >= score:
             self.body = self.body[1:]
+        # проверка на столкновение с самим собой
+        if self.body.count([self.rect.x, self.rect.y]) > 1:
+            game_over(score, name, self.border)
+            return
         self.prev = score
 
 
@@ -170,8 +178,8 @@ def load_image(name):
 
 
 def game():
-    choice = start_screen()
-    fps = int(choice_of_speed())
+    choice, name = start_screen()
+    fps = int(choice_of_speed(name))
     w, n = 800, 40
     cell_size = w // n
     snake_color = pygame.Color('#a3d247')  # более тёмный цвет
@@ -180,9 +188,11 @@ def game():
     image_fruit = load_image('fruit.png')
     font = pygame.font.SysFont("comicsansms", 20)
     direction = 'RIGHT'  # направление
-    fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) * cell_size, randrange(1, ((H - cell_size) // cell_size)) * cell_size]  # координата фрукта
-    score = 0
-    snake = Snake(20, choice, fps, 100)
+    # случайные координаты фрукта:
+    fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) * cell_size,
+                 randrange(1, ((H - cell_size) // cell_size)) * cell_size]
+    score = 0  # очки
+    snake = Snake(20, choice, 100)
     while True:
         clock.tick(fps)
         snake_body = snake.body
@@ -204,38 +214,57 @@ def game():
         for i in range(0, n):
             for j in range(0, n):
                 if (i + j) % 2 == 0:
-                    pygame.draw.rect(screen, snake_color, ((i * cell_size, j * cell_size), (cell_size, cell_size)))
+                    pygame.draw.rect(screen, snake_color, ((i * cell_size,
+                                                            j * cell_size),
+                                                           (cell_size,
+                                                            cell_size)))
         # если игрок выбрал ограниченное поле, то рисуем границу:
         if choice == 'limited field':
-            pygame.draw.rect(screen, border_color, (
-                (cell_size // 2, cell_size // 2), (W - cell_size, H - cell_size)), cell_size // 2)
+            pygame.draw.rect(screen, border_color,
+                             ((cell_size // 2, cell_size // 2),
+                              (W - cell_size, H - cell_size)), cell_size // 2)
         # змеиное туловище
         for pos in snake_body:
             screen.blit(image_snake, (pos[0], pos[1]))
             if fruit_pos == pos:
                 # меняем координату и прибавляем очки
-                fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) * cell_size, randrange(1, ((H - cell_size) // cell_size)) * cell_size]
+                fruit_pos = [randrange(1, ((W - cell_size) // cell_size)) *
+                             cell_size, randrange(1, ((H - cell_size) //
+                                                      cell_size)) * cell_size]
                 score += 1
 
         screen.blit(image_fruit, (fruit_pos[0], fruit_pos[1]))
-        all_sprites.update(direction, 1, 1, score)
-        # очки:
-        string_rendered = font.render(f"score: {score}", True, pygame.Color('white'))
+        all_sprites.update(direction, 1, 1, score, name)
+        # отрисовка очков:
+        string_rendered = font.render(f"score: {score}", True,
+                                      pygame.Color('white'))
         screen.blit(string_rendered, [710, 570])
 
         all_sprites.draw(screen)
         pygame.display.flip()
 
 
-def game_over(score):
+def game_over(score, name, border):
     font = pygame.font.SysFont('times new roman', 50)
-    game_over_surface = font.render("You've lost! Your score: " + str(score), True, 'red')
+    game_over_surface = font.render("You've lost! Your score: " + str(score),
+                                    True, 'red')
     rect = game_over_surface.get_rect()
     rect.midtop = (W // 2, H // 4)
     screen.blit(game_over_surface, rect)
     pygame.display.flip()
-    # time.sleep(15)
-    # terminate()
+    # сохранение результатов в файл:
+    file = open('Player rating.txt', mode='a', encoding='utf8')
+    if border == 'limited field':
+        file.write(f'Player "{name}" finished the game on a limited field '
+                   f'with a score: {score}. Date: '
+                   f'{datetime.now().strftime("%d %b %Y %H:%M:%S")}\n')
+    elif border == 'unlimited field':
+        file.write(f'Player "{name}" finished the game on an unlimited field '
+                   f'with a score: {score}. Date: '
+                   f'{datetime.now().strftime("%d %b %Y %H:%M:%S")}\n')
+    file.close()
+    sleep(3)
+    terminate()
 
 
 print('начало игры')
