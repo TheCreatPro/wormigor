@@ -8,7 +8,7 @@ from datetime import datetime
 pygame.init()
 
 clock = pygame.time.Clock()
-pygame.display.set_caption('Wormi')
+pygame.display.set_caption('SnakeI')
 SIZE = W, H = 800, 600
 screen = pygame.display.set_mode(SIZE)
 WHITE = pygame.Color('#FFFFFF')
@@ -102,7 +102,8 @@ def choice_of_speed(name):
                         0 < int(fps) <= 50:
                     file = open('Player rating.txt', mode='a', encoding='utf8')
                     file.write(
-                        f'Player "{name}" started the game. Date: '
+                        f'Player "{name}" started the game. Speed {fps}. '
+                        f'Date: '
                         f'{datetime.now().strftime("%d %b %Y %H:%M:%S")}\n')
                     file.close()
                     return fps  # начинаем игру
@@ -140,22 +141,22 @@ class Snake(pygame.sprite.Sprite):
                                                not 19 < self.rect.y < 561):
             game_over(score, name, self.border)
             return
-        elif direction == 'LEFT':
+        if direction == 'LEFT':
             self.rect.x -= 20
-        elif direction == 'RIGHT':
+        if direction == 'RIGHT':
             self.rect.x += 20
-        elif direction == 'DOWN':
+        if direction == 'DOWN':
             self.rect.y += 20
-        elif direction == 'UP':
+        if direction == 'UP':
             self.rect.y -= 20
         if self.border == 'unlimited field':
             if self.rect.x < 0:
                 self.rect.x = W
-            elif self.rect.x > W:
+            elif self.rect.x >= W:
                 self.rect.x = 0
             if self.rect.y < 0:
                 self.rect.y = H
-            elif self.rect.y > H:
+            elif self.rect.y >= H:
                 self.rect.y = 0
         self.body.append([self.rect.x, self.rect.y])
         # если очки увеличатся, то хвостик удлинится:
@@ -204,11 +205,11 @@ def game():
                 # игрок выбирает режим:
                 if event.key == pygame.K_UP and direction != 'DOWN':
                     direction = 'UP'
-                elif event.key == pygame.K_DOWN and direction != 'UP':
+                if event.key == pygame.K_DOWN and direction != 'UP':
                     direction = 'DOWN'
-                elif event.key == pygame.K_LEFT and direction != 'RIGHT':
+                if event.key == pygame.K_LEFT and direction != 'RIGHT':
                     direction = 'LEFT'
-                elif event.key == pygame.K_RIGHT and direction != 'LEFT':
+                if event.key == pygame.K_RIGHT and direction != 'LEFT':
                     direction = 'RIGHT'
         # отрисовка игрового поля:
         for i in range(0, n):
@@ -267,5 +268,4 @@ def game_over(score, name, border):
     terminate()
 
 
-print('начало игры')
 game()
